@@ -12,6 +12,17 @@
     "state": {"enum": ["DRAFT", "VALIDATED", "PLANNED", "APPROVED", "APPLYING", "VERIFYING", "SUCCEEDED", "FAILED_RETRYABLE", "RESUMING", "FAILED_ROLLBACK_REQUIRED", "ROLLING_BACK", "ROLLED_BACK", "BLOCKED"]},
     "generation": {"type": "integer", "minimum": 1},
     "updated_at": {"type": "string", "format": "date-time"},
-    "history": {"type": "array", "minItems": 1}
+    "history": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["from", "to", "at"],
+        "properties": {
+          "from": {"type": ["string", "null"]},
+          "to": {"enum": ["DRAFT", "VALIDATED", "PLANNED", "APPROVED", "APPLYING", "VERIFYING", "SUCCEEDED", "FAILED_RETRYABLE", "RESUMING", "FAILED_ROLLBACK_REQUIRED", "ROLLING_BACK", "ROLLED_BACK", "BLOCKED"]},
+          "at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
   }
 }

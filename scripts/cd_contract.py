@@ -12,6 +12,9 @@ import sys
 from typing import Any
 
 SCHEMA = "nddev-cd-plan/v1"
+STATE_SCHEMA = "nddev-cd-state/v1"
+APPROVAL_SCHEMA = "nddev-cd-approval/v1"
+EVIDENCE_SCHEMA = "nddev-cd-evidence/v1"
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 DEPLOYMENT = re.compile(r"^deploy_[0-9A-Z]{26}$")
@@ -100,13 +103,91 @@ def validate_plan(plan: dict[str, Any], *, now: dt.datetime | None = None) -> No
 
 
 def validate_state(state: dict[str, Any], plan: dict[str, Any]) -> None:
-    if state.get("schema") != "nddev-cd-state/v1" or state.get("state") not in STATES:
+    required = {"schema", "deployment_id", "plan_digest", "state", "generation", "updated_at", "history"}
+    if set(state) != required or state.get("schema") != STATE_SCHEMA or state.get("state") not in STATES:
         raise ValueError("invalid deployment state schema")
     if state.get("deployment_id") != plan["deployment_id"] or state.get("plan_digest") != plan["plan_digest"]:
         raise ValueError("state is not bound to the exact plan")
     if not isinstance(state.get("generation"), int) or state["generation"] < 1 or not state.get("history"):
         raise ValueError("state generation or history is invalid")
-    timestamp(state["updated_at"])
+    updated = timestamp(state["updated_at"])
+    if not isinstance(state["history"], list) or len(state["history"]) != state["generation"]:
+        raise ValueError("state history must contain exactly one row per generation")
+    previous_to = None
+    previous_at = None
+    for index, row in enumerate(state["history"]):
+        if set(row) != {"from", "to", "at"} or row["to"] not in STATES:
+            raise ValueError("invalid state history row")
+        at = timestamp(row["at"])
+        if previous_at is not None and at < previous_at:
+            raise ValueError("state history timestamps are not monotonic")
+        if index == 0:
+            if row["from"] is not None or row["to"] != "DRAFT":
+                raise ValueError("initial state history must start at DRAFT from null")
+        elif row["from"] != previous_to or row["from"] not in TRANSITIONS or row["to"] not in TRANSITIONS[row["from"]]:
+            raise ValueError("state history contains an invalid transition")
+        previous_to, previous_at = row["to"], at
+    if previous_to != state["state"] or previous_at != updated:
+        raise ValueError("state head differs from history")
+
+
+def document_digest(value: dict[str, Any], field: str) -> str:
+    unsigned = copy.deepcopy(value)
+    unsigned.pop(field, None)
+    return "sha256:" + hashlib.sha256(canonical(unsigned)).hexdigest()
+
+
+def validate_approval(approval: dict[str, Any], plan: dict[str, Any]) -> None:
+    required = {"schema", "deployment_id", "plan_digest", "operation", "approved_at", "approver", "approval_digest"}
+    if set(approval) != required or approval.get("schema") != APPROVAL_SCHEMA:
+        raise ValueError("invalid approval schema")
+    if approval["deployment_id"] != plan["deployment_id"] or approval["plan_digest"] != plan["plan_digest"]:
+        raise ValueError("approval is not bound to the exact plan")
+    if approval["operation"] not in {"apply", "resume", "rollback"}:
+        raise ValueError("invalid approved operation")
+    timestamp(approval["approved_at"])
+    if not re.fullmatch(r"[A-Za-z0-9_.@/-]{1,128}", approval["approver"]):
+        raise ValueError("invalid approver identity")
+    if approval["approval_digest"] != document_digest(approval, "approval_digest"):
+        raise ValueError("approval digest mismatch")
+
+
+def validate_evidence(evidence: dict[str, Any], plan: dict[str, Any], state: dict[str, Any]) -> None:
+    required = {"schema", "deployment_id", "plan_digest", "state_generation", "operation", "result", "recorded_at", "observations", "evidence_digest"}
+    if set(evidence) != required or evidence.get("schema") != EVIDENCE_SCHEMA:
+        raise ValueError("invalid evidence schema")
+    if evidence["deployment_id"] != plan["deployment_id"] or evidence["plan_digest"] != plan["plan_digest"]:
+        raise ValueError("evidence is not bound to the exact plan")
+    if evidence["state_generation"] != state["generation"]:
+        raise ValueError("evidence is not bound to the exact state generation")
+    if evidence["operation"] not in {"apply", "verify", "resume", "rollback"} or evidence["result"] not in {"succeeded", "retryable", "rollback-required", "blocked"}:
+        raise ValueError("invalid evidence operation or result")
+    timestamp(evidence["recorded_at"])
+    observations = evidence["observations"]
+    if not isinstance(observations, list) or not observations or any(not DIGEST.fullmatch(row) for row in observations):
+        raise ValueError("evidence observations must be non-empty content digests")
+    if evidence["evidence_digest"] != document_digest(evidence, "evidence_digest"):
+        raise ValueError("evidence digest mismatch")
+    expected_states = {
+        ("apply", "succeeded"): {"VERIFYING"},
+        ("verify", "succeeded"): {"SUCCEEDED"},
+        ("resume", "succeeded"): {"APPLYING", "VERIFYING"},
+        ("rollback", "succeeded"): {"ROLLED_BACK"},
+        ("apply", "retryable"): {"FAILED_RETRYABLE"},
+        ("verify", "retryable"): {"FAILED_RETRYABLE"},
+        ("resume", "retryable"): {"FAILED_RETRYABLE"},
+        ("rollback", "retryable"): {"FAILED_RETRYABLE"},
+        ("apply", "rollback-required"): {"FAILED_ROLLBACK_REQUIRED"},
+        ("verify", "rollback-required"): {"FAILED_ROLLBACK_REQUIRED"},
+        ("resume", "rollback-required"): {"FAILED_ROLLBACK_REQUIRED"},
+        ("rollback", "rollback-required"): {"FAILED_ROLLBACK_REQUIRED"},
+        ("apply", "blocked"): {"BLOCKED"},
+        ("verify", "blocked"): {"BLOCKED"},
+        ("resume", "blocked"): {"BLOCKED"},
+        ("rollback", "blocked"): {"BLOCKED"},
+    }
+    if state["state"] not in expected_states[(evidence["operation"], evidence["result"])]:
+        raise ValueError("evidence result differs from resulting deployment state")
 
 
 def transition(state: dict[str, Any], target: str, plan: dict[str, Any], at: str) -> dict[str, Any]:
@@ -140,6 +221,9 @@ def main() -> int:
     sub.add_parser("validate-schema")
     seal = sub.add_parser("seal"); seal.add_argument("input"); seal.add_argument("output")
     validate = sub.add_parser("validate-plan"); validate.add_argument("plan"); validate.add_argument("--now")
+    state_check = sub.add_parser("validate-state"); state_check.add_argument("plan"); state_check.add_argument("state")
+    approval_check = sub.add_parser("validate-approval"); approval_check.add_argument("plan"); approval_check.add_argument("approval"); approval_check.add_argument("--operation")
+    evidence_check = sub.add_parser("validate-evidence"); evidence_check.add_argument("plan"); evidence_check.add_argument("state"); evidence_check.add_argument("evidence")
     move = sub.add_parser("transition"); move.add_argument("plan"); move.add_argument("state"); move.add_argument("target"); move.add_argument("output"); move.add_argument("--at", required=True)
     args = parser.parse_args()
     try:
@@ -151,6 +235,15 @@ def main() -> int:
             plan = load(args.input); plan["plan_digest"] = plan_digest(plan); validate_plan(plan); write(args.output, plan); return 0
         if args.command == "validate-plan":
             now = timestamp(args.now) if args.now else None; validate_plan(load(args.plan), now=now); return 0
+        if args.command == "validate-state":
+            plan = load(args.plan); validate_plan(plan); validate_state(load(args.state), plan); return 0
+        if args.command == "validate-approval":
+            plan = load(args.plan); validate_plan(plan); approval = load(args.approval); validate_approval(approval, plan)
+            if args.operation and approval["operation"] != args.operation:
+                raise ValueError("approval operation differs from requested operation")
+            return 0
+        if args.command == "validate-evidence":
+            plan = load(args.plan); state = load(args.state); validate_plan(plan); validate_state(state, plan); validate_evidence(load(args.evidence), plan, state); return 0
         if args.command == "transition":
             plan = load(args.plan); result = transition(load(args.state), args.target, plan, args.at); write(args.output, result); return 0
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:

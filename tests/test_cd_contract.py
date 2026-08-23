@@ -38,6 +38,19 @@ def plan() -> dict:
     return value
 
 
+def state(value: dict, current: str = "DRAFT", generation: int = 1) -> dict:
+    if current == "DRAFT":
+        history = [{"from": None, "to": "DRAFT", "at": value["created_at"]}]
+    elif current == "APPLYING":
+        sequence = ["DRAFT", "VALIDATED", "PLANNED", "APPROVED", "APPLYING"]
+        history = [{"from": None, "to": sequence[0], "at": value["created_at"]}]
+        history += [{"from": sequence[index - 1], "to": sequence[index], "at": value["created_at"]} for index in range(1, len(sequence))]
+    else:
+        raise AssertionError("unsupported test state")
+    assert len(history) == generation
+    return {"schema": "nddev-cd-state/v1", "deployment_id": value["deployment_id"], "plan_digest": value["plan_digest"], "state": current, "generation": generation, "updated_at": value["created_at"], "history": history}
+
+
 class ContractTests(unittest.TestCase):
     def test_valid_plan(self):
         contract.validate_plan(plan(), now=dt.datetime(2026, 8, 23, 10, 30, tzinfo=dt.timezone.utc))
@@ -58,21 +71,47 @@ class ContractTests(unittest.TestCase):
 
     def test_state_is_plan_bound_and_terminal(self):
         value = plan()
-        state = {"schema": "nddev-cd-state/v1", "deployment_id": value["deployment_id"], "plan_digest": value["plan_digest"], "state": "DRAFT", "generation": 1, "updated_at": value["created_at"], "history": [{"from": None, "to": "DRAFT", "at": value["created_at"]}]}
+        state_value = state(value)
         for target in ("VALIDATED", "PLANNED", "APPROVED", "APPLYING", "VERIFYING", "SUCCEEDED"):
-            state = contract.transition(state, target, value, "2026-08-23T10:01:00Z")
+            state_value = contract.transition(state_value, target, value, "2026-08-23T10:01:00Z")
         with self.assertRaisesRegex(ValueError, "not allowed"):
-            contract.transition(state, "APPLYING", value, "2026-08-23T10:02:00Z")
+            contract.transition(state_value, "APPLYING", value, "2026-08-23T10:02:00Z")
 
     def test_retry_and_rollback_paths(self):
         value = plan()
-        base = {"schema": "nddev-cd-state/v1", "deployment_id": value["deployment_id"], "plan_digest": value["plan_digest"], "state": "APPLYING", "generation": 5, "updated_at": value["created_at"], "history": [{"from": "APPROVED", "to": "APPLYING", "at": value["created_at"]}]}
+        base = state(value, "APPLYING", 5)
         failed = contract.transition(copy.deepcopy(base), "FAILED_RETRYABLE", value, "2026-08-23T10:02:00Z")
         resumed = contract.transition(failed, "RESUMING", value, "2026-08-23T10:03:00Z")
         contract.transition(resumed, "APPLYING", value, "2026-08-23T10:04:00Z")
         rollback = contract.transition(copy.deepcopy(base), "FAILED_ROLLBACK_REQUIRED", value, "2026-08-23T10:02:00Z")
         rollback = contract.transition(rollback, "ROLLING_BACK", value, "2026-08-23T10:03:00Z")
         contract.transition(rollback, "ROLLED_BACK", value, "2026-08-23T10:04:00Z")
+
+    def test_history_must_be_complete_and_contiguous(self):
+        value = plan(); broken = state(value, "APPLYING", 5); broken["history"][3]["from"] = "DRAFT"
+        with self.assertRaisesRegex(ValueError, "invalid transition"):
+            contract.validate_state(broken, value)
+
+    def test_approval_is_exact_plan_and_operation_bound(self):
+        value = plan()
+        approval = {"schema": "nddev-cd-approval/v1", "deployment_id": value["deployment_id"], "plan_digest": value["plan_digest"], "operation": "apply", "approved_at": "2026-08-23T10:00:30Z", "approver": "example-reviewer"}
+        approval["approval_digest"] = contract.document_digest(approval, "approval_digest")
+        contract.validate_approval(approval, value)
+        approval["operation"] = "rollback"
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            contract.validate_approval(approval, value)
+
+    def test_evidence_is_exact_state_generation_bound(self):
+        value = plan(); state_value = state(value)
+        for target in ("VALIDATED", "PLANNED", "APPROVED", "APPLYING", "VERIFYING", "SUCCEEDED"):
+            state_value = contract.transition(state_value, target, value, "2026-08-23T10:01:00Z")
+        evidence = {"schema": "nddev-cd-evidence/v1", "deployment_id": value["deployment_id"], "plan_digest": value["plan_digest"], "state_generation": state_value["generation"], "operation": "verify", "result": "succeeded", "recorded_at": "2026-08-23T10:01:00Z", "observations": [digest("9")]}
+        evidence["evidence_digest"] = contract.document_digest(evidence, "evidence_digest")
+        contract.validate_evidence(evidence, value, state_value)
+        evidence["state_generation"] += 1
+        evidence["evidence_digest"] = contract.document_digest(evidence, "evidence_digest")
+        with self.assertRaisesRegex(ValueError, "exact state generation"):
+            contract.validate_evidence(evidence, value, state_value)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ python3 -m py_compile scripts/cd_contract.py tests/test_cd_contract.py
 python3 - <<'PY'
 import json
 from pathlib import Path
+import re
 
 anchor = Path(".gds/repository.yaml").read_text(encoding="utf-8")
 for line in (
@@ -52,6 +53,36 @@ for command in ("seal)", "validate-plan)", "transition)"):
         raise SystemExit(f"contract action lacks closed command {command!r}")
 if "eval " in action or "bash -c" in action:
     raise SystemExit("contract action permits free-form command execution")
+
+lifecycle_action = Path(".github/actions/lifecycle/action.yml").read_text(encoding="utf-8")
+for required in ("nddev-cd-adapter", "validate-approval", "validate-evidence", "command -v nddev-cd-adapter"):
+    if required not in lifecycle_action:
+        raise SystemExit(f"lifecycle action lacks {required!r}")
+for forbidden in ("eval ", "bash -c", "ssh ", "sudo ", "curl "):
+    if forbidden in lifecycle_action:
+        raise SystemExit(f"lifecycle action exposes forbidden execution surface {forbidden!r}")
+
+for name in ("apply", "verify", "resume", "rollback", "evidence"):
+    content = Path(f".github/workflows/cd-{name}.yml").read_text(encoding="utf-8")
+    if "pull_request_target" in content or "secrets:" in content or "runs-on: ${{" in content:
+        raise SystemExit(f"cd-{name} workflow violates the fixed trust boundary")
+    if name in {"apply", "resume", "rollback"}:
+        for required in ("runs-on: [self-hosted, cd-apply-out-of-band]", "environment: cd-apply", "cancel-in-progress: false", "id-token: write"):
+            if required not in content:
+                raise SystemExit(f"cd-{name} workflow lacks {required!r}")
+    if name == "verify" and "runs-on: [self-hosted, cd-verify-out-of-band]" not in content:
+        raise SystemExit("cd-verify workflow is not independent of the managed fleet")
+
+declared_labels = {
+    line.removeprefix("    - ").strip()
+    for line in Path(".github/actionlint.yaml").read_text(encoding="utf-8").splitlines()
+    if line.startswith("    - ")
+}
+used_labels = set()
+for path in Path(".github/workflows").glob("*.yml"):
+    used_labels.update(re.findall(r"runs-on: \[self-hosted, ([a-z0-9-]+)\]", path.read_text(encoding="utf-8")))
+if declared_labels != used_labels:
+    raise SystemExit(f"actionlint labels differ from workflow contract: declared={sorted(declared_labels)} used={sorted(used_labels)}")
 PY
 
 python3 - <<'PY'

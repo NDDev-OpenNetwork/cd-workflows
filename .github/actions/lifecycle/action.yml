@@ -1,0 +1,60 @@
+name: NDDev typed CD lifecycle
+description: Execute one closed adapter operation and validate all resulting state and evidence
+
+inputs:
+  operation:
+    required: true
+    description: apply, verify, resume or rollback
+  plan:
+    required: true
+    description: Relative sealed plan path
+  state:
+    required: true
+    description: Relative current state path
+  approval:
+    required: false
+    description: Relative exact approval path; required except for verify
+  state_output:
+    required: true
+    description: Relative next-state output path
+  evidence_output:
+    required: true
+    description: Relative evidence output path
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs and execute closed adapter protocol
+      shell: bash
+      env:
+        OPERATION: ${{ inputs.operation }}
+        PLAN: ${{ inputs.plan }}
+        STATE: ${{ inputs.state }}
+        APPROVAL: ${{ inputs.approval }}
+        STATE_OUTPUT: ${{ inputs.state_output }}
+        EVIDENCE_OUTPUT: ${{ inputs.evidence_output }}
+      run: |
+        set -euo pipefail
+        valid_path() {
+          [[ "$1" =~ ^[A-Za-z0-9._/-]+$ && "$1" != /* && "$1" != *..* ]]
+        }
+        valid_path "$PLAN"
+        valid_path "$STATE"
+        valid_path "$STATE_OUTPUT"
+        valid_path "$EVIDENCE_OUTPUT"
+        [[ "$OPERATION" =~ ^(apply|verify|resume|rollback)$ ]]
+        root="$(cd -- "${{ github.action_path }}/../../.." && pwd)"
+        python3 "$root/scripts/cd_contract.py" validate-plan "$PLAN"
+        python3 "$root/scripts/cd_contract.py" validate-state "$PLAN" "$STATE"
+        adapter_args=("$OPERATION" --plan "$PLAN" --state "$STATE" --state-output "$STATE_OUTPUT" --evidence-output "$EVIDENCE_OUTPUT")
+        if [[ "$OPERATION" == verify ]]; then
+          [[ -z "$APPROVAL" ]]
+        else
+          valid_path "$APPROVAL"
+          python3 "$root/scripts/cd_contract.py" validate-approval "$PLAN" "$APPROVAL" --operation "$OPERATION"
+          adapter_args+=(--approval "$APPROVAL")
+        fi
+        command -v nddev-cd-adapter >/dev/null
+        nddev-cd-adapter "${adapter_args[@]}"
+        python3 "$root/scripts/cd_contract.py" validate-state "$PLAN" "$STATE_OUTPUT"
+        python3 "$root/scripts/cd_contract.py" validate-evidence "$PLAN" "$STATE_OUTPUT" "$EVIDENCE_OUTPUT"

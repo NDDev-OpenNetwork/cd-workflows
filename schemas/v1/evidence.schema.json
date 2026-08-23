@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/NDDev-OpenNetwork/cd-workflows/schemas/v1/evidence.schema.json",
+  "title": "NDDev deployment evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "deployment_id", "plan_digest", "state_generation", "operation", "result", "recorded_at", "observations", "evidence_digest"],
+  "properties": {
+    "schema": {"const": "nddev-cd-evidence/v1"},
+    "deployment_id": {"type": "string", "pattern": "^deploy_[0-9A-Z]{26}$"},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "state_generation": {"type": "integer", "minimum": 1},
+    "operation": {"enum": ["apply", "verify", "resume", "rollback"]},
+    "result": {"enum": ["succeeded", "retryable", "rollback-required", "blocked"]},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "observations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+    "evidence_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

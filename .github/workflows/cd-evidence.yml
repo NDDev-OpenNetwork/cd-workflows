@@ -1,0 +1,35 @@
+name: cd-evidence
+
+on:
+  workflow_call:
+    inputs:
+      contract_sha: {type: string, required: true}
+      plan_path: {type: string, required: true}
+      state_path: {type: string, required: true}
+      evidence_path: {type: string, required: true}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with: {persist-credentials: false, path: source}
+      - name: Validate immutable inputs before contract checkout
+        env: {CONTRACT_SHA: "${{ inputs.contract_sha }}", PLAN_PATH: "${{ inputs.plan_path }}", STATE_PATH: "${{ inputs.state_path }}", EVIDENCE_PATH: "${{ inputs.evidence_path }}"}
+        run: |
+          [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          for value in "$PLAN_PATH" "$STATE_PATH" "$EVIDENCE_PATH"; do
+            [[ "$value" =~ ^[A-Za-z0-9._/-]+$ && "$value" != /* && "$value" != *..* ]]
+          done
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with: {repository: NDDev-OpenNetwork/cd-workflows, ref: "${{ inputs.contract_sha }}", persist-credentials: false, path: _cd}
+      - uses: ./_cd/.github/actions/contract
+        with:
+          command: validate-evidence
+          plan: source/${{ inputs.plan_path }}
+          state: source/${{ inputs.state_path }}
+          output: source/${{ inputs.evidence_path }}

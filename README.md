@@ -7,14 +7,23 @@ transitions, verification evidence, retry/resume and exact rollback semantics.
 It contains no environment topology or credentials. Private callers choose
 their reviewed executor, environment, inventory and secret references.
 
-The initial v1 contract deliberately performs no external mutation. It seals
-and validates plans and proves state-machine behavior before mutation adapters
-are introduced.
+The v1 lifecycle exposes typed plan, apply, verify, evidence, resume and exact
+rollback entrypoints. Mutation entrypoints invoke only the fixed
+`nddev-cd-adapter` protocol on an independently managed executor. The adapter
+receives the sealed plan and cannot receive a workflow-supplied command, host,
+runner label, target selector or secret name.
 
 `cd-plan.yml` exposes two fixed execution surfaces: GitHub-hosted, or a generic
 out-of-band runner carrying `cd-plan-out-of-band`. Callers cannot supply runner
 labels or commands. A sealed plan artifact is transport evidence only; callers
 must persist durable evidence outside Actions retention.
+
+`cd-apply.yml`, `cd-resume.yml` and `cd-rollback.yml` run only on
+`cd-apply-out-of-band`, behind the fixed `cd-apply` GitHub environment and with
+non-cancelling per-deployment serialization. `cd-verify.yml` uses the separate
+`cd-verify-out-of-band` surface. Every adapter result must validate as an exact
+plan-bound state transition and content-addressed evidence record before the
+workflow can succeed. `cd-evidence.yml` provides a hosted, read-only verifier.
 
 ## Trust boundaries
 
