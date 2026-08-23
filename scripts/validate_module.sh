@@ -93,20 +93,46 @@ python3 - <<'PYCHECK'
 from pathlib import Path
 import re
 
+# Read strictly, by column. The first version of this stripped every line and
+# looked for `- name:` anywhere, which ignores indentation entirely -- so a
+# catalog that no YAML parser will load still "read fine" and the whole check
+# below passed on it. That was found by mis-indenting an entry by two spaces:
+# `yaml.safe_load` raised `expected <block end>`, and this script printed OK.
+# The module ships no dependencies, so the answer is not PyYAML; it is refusing
+# any shape other than the one shape this file is allowed to have.
 registry = {}
 current = {}
-for line in Path("catalog/actions.yml").read_text(encoding="utf-8").splitlines():
-    stripped = line.strip()
-    if stripped.startswith("- name:"):
+catalog = Path("catalog/actions.yml")
+in_actions = False
+for number, line in enumerate(catalog.read_text(encoding="utf-8").splitlines(), 1):
+    if not line.strip() or line.lstrip().startswith("#"):
+        continue
+    if not in_actions:
+        in_actions = line == "actions:"
+        continue
+    if line.startswith("  - name: "):
         if current:
             registry[current["name"]] = current
-        current = {"name": stripped.split(":", 1)[1].strip().strip('"')}
-    elif stripped.startswith("sha:") and current:
-        current["sha"] = stripped.split(":", 1)[1].strip().strip('"')
-    elif stripped.startswith("version:") and current:
-        current["version"] = stripped.split(":", 1)[1].strip().strip('"')
+        current = {"name": line[len("  - name: "):].strip().strip('"')}
+    elif line.startswith("    sha: ") and current:
+        current["sha"] = line[len("    sha: "):].strip().strip('"')
+    elif line.startswith("    version: ") and current:
+        current["version"] = line[len("    version: "):].strip().strip('"')
+    else:
+        raise SystemExit(
+            f"{catalog}:{number}: catalog entries are exactly "
+            f'`  - name: X` / `    sha: \"…\"` / `    version: \"…\"`; got {line!r}'
+        )
 if current:
     registry[current["name"]] = current
+if not registry:
+    raise SystemExit(f"{catalog}: declares no actions; refusing to pass a check with nothing to check")
+for name, entry in sorted(registry.items()):
+    missing = [k for k in ("sha", "version") if k not in entry]
+    if missing:
+        raise SystemExit(f"{catalog}: {name} is missing {', '.join(missing)}")
+    if len(entry["sha"]) != 40:
+        raise SystemExit(f"{catalog}: {name} records a {len(entry['sha'])}-character SHA, expected 40")
 
 pattern = re.compile(r"uses:\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)@([0-9a-f]{40})\s*#\s*(\S+)")
 seen = set()
