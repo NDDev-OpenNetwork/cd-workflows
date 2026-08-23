@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/NDDev-OpenNetwork/cd-workflows/schemas/v1/plan.schema.json",
+  "title": "NDDev immutable deployment plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "deployment_id", "idempotency_key", "created_at", "expires_at",
+    "estate", "module_lock_sha256", "modules", "artifact_manifest_digest",
+    "target", "previous_state_digest", "operations", "health", "plan_digest"
+  ],
+  "properties": {
+    "schema": {"const": "nddev-cd-plan/v1"},
+    "deployment_id": {"type": "string", "pattern": "^deploy_[0-9A-Z]{26}$"},
+    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 128},
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "estate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "sha"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "sha": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "module_lock_sha256": {"$ref": "#/$defs/digest"},
+    "modules": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "sha"],
+        "properties": {"name": {"type": "string", "minLength": 1}, "sha": {"$ref": "#/$defs/sha"}}
+      }
+    },
+    "artifact_manifest_digest": {"$ref": "#/$defs/digest"},
+    "target": {
+      "type": "object", "additionalProperties": false,
+      "required": ["environment", "inventory_fingerprint"],
+      "properties": {
+        "environment": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$"},
+        "inventory_fingerprint": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "previous_state_digest": {"$ref": "#/$defs/digest"},
+    "operations": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "depends_on", "target_digest", "timeout_seconds", "rollback"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+          "kind": {"enum": ["install-artifact", "write-config", "restart-service", "provider-reconcile", "verify-health"]},
+          "depends_on": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "target_digest": {"$ref": "#/$defs/digest"},
+          "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+          "rollback": {"enum": ["restore-previous", "compensate", "none-read-only"]}
+        }
+      }
+    },
+    "health": {
+      "type": "object", "additionalProperties": false,
+      "required": ["query_contract_digest", "success_threshold", "failure_action"],
+      "properties": {
+        "query_contract_digest": {"$ref": "#/$defs/digest"},
+        "success_threshold": {"type": "integer", "minimum": 1, "maximum": 100},
+        "failure_action": {"enum": ["resume", "rollback-required"]}
+      }
+    },
+    "plan_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}
