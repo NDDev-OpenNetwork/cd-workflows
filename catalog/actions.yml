@@ -1,0 +1,22 @@
+# Every third-party action this module pins, and the release each SHA is.
+#
+# The pin is the SHA; the comment beside it is the only thing a human or
+# Dependabot reads to know which release that is. When they disagree the
+# comment wins in every review and loses in every run.
+#
+# They did disagree: fifteen checkout pins carried `# v5.0.0` while the SHA
+# was v7.0.1 -- two majors apart, on a module that deploys the fleet. Nothing
+# in this repository compared them, so the label drifted from the day it was
+# written.
+#
+# `scripts/validate_module.sh` now holds every `uses:` in .github/ to this
+# table, so a bump has to change one reviewed place rather than fifteen
+# unreviewed comments.
+schema: nddev-cd-actions/v1
+actions:
+  - name: actions/checkout
+    sha: "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    version: "v7.0.1"
+  - name: actions/upload-artifact
+    sha: "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    version: "v7.0.1"
