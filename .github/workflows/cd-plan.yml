@@ -39,11 +39,11 @@ jobs:
           set -euo pipefail
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$PLAN_PATH" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_PATH" != /* && "$PLAN_PATH" != *..* ]]
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           path: source
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: NDDev-OpenNetwork/cd-workflows
           ref: ${{ inputs.contract_sha }}
@@ -81,11 +81,11 @@ jobs:
           set -euo pipefail
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$PLAN_PATH" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_PATH" != /* && "$PLAN_PATH" != *..* ]]
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           path: source
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: NDDev-OpenNetwork/cd-workflows
           ref: ${{ inputs.contract_sha }}

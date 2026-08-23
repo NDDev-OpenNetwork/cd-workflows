@@ -85,6 +85,55 @@ if declared_labels != used_labels:
     raise SystemExit(f"actionlint labels differ from workflow contract: declared={sorted(declared_labels)} used={sorted(used_labels)}")
 PY
 
+python3 - <<'PYCHECK'
+# Every pinned action must match catalog/actions.yml exactly: the SHA and the
+# release its comment names. A comment nobody compares is a comment that
+# drifts, and this one did -- fifteen checkout pins said v5.0.0 while the SHA
+# was v7.0.1, two majors apart, on the module that deploys the fleet.
+from pathlib import Path
+import re
+
+registry = {}
+current = {}
+for line in Path("catalog/actions.yml").read_text(encoding="utf-8").splitlines():
+    stripped = line.strip()
+    if stripped.startswith("- name:"):
+        if current:
+            registry[current["name"]] = current
+        current = {"name": stripped.split(":", 1)[1].strip().strip('"')}
+    elif stripped.startswith("sha:") and current:
+        current["sha"] = stripped.split(":", 1)[1].strip().strip('"')
+    elif stripped.startswith("version:") and current:
+        current["version"] = stripped.split(":", 1)[1].strip().strip('"')
+if current:
+    registry[current["name"]] = current
+
+pattern = re.compile(r"uses:\s+([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)@([0-9a-f]{40})\s*#\s*(\S+)")
+seen = set()
+for path in sorted(Path(".github").rglob("*.yml")):
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if "uses:" not in line or "@" not in line:
+            continue
+        if re.search(r"uses:\s+\./", line):
+            continue
+        match = pattern.search(line)
+        if match is None:
+            raise SystemExit(f"{path}:{number}: pinned action needs a 40-character SHA and a version comment")
+        name, sha, version = match.groups()
+        entry = registry.get(name)
+        if entry is None:
+            raise SystemExit(f"{path}:{number}: {name} is not declared in catalog/actions.yml")
+        if sha != entry["sha"]:
+            raise SystemExit(f"{path}:{number}: {name} pins {sha[:12]} but the catalog records {entry['sha'][:12]}")
+        if version != entry["version"]:
+            raise SystemExit(f"{path}:{number}: {name} comment says {version} but the catalog records {entry['version']} for this SHA")
+        seen.add(name)
+
+unused = sorted(set(registry) - seen)
+if unused:
+    raise SystemExit(f"catalog/actions.yml declares actions nothing uses: {unused}")
+PYCHECK
+
 python3 - <<'PY'
 from pathlib import Path
 import re
