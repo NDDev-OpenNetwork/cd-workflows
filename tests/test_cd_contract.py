@@ -3,6 +3,9 @@ import datetime as dt
 import importlib.util
 import pathlib
 import unittest
+import tempfile
+import json
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("cd_contract", ROOT / "scripts/cd_contract.py")
@@ -112,6 +115,15 @@ class ContractTests(unittest.TestCase):
         evidence["evidence_digest"] = contract.document_digest(evidence, "evidence_digest")
         with self.assertRaisesRegex(ValueError, "exact state generation"):
             contract.validate_evidence(evidence, value, state_value)
+
+    def test_cli_rejects_stale_plan_without_explicit_now(self):
+        value = plan()
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "plan.json"; path.write_text(json.dumps(value))
+            with mock.patch.object(contract.dt, "datetime", wraps=contract.dt.datetime) as clock:
+                clock.now.return_value = dt.datetime(2026, 8, 23, 12, 0, tzinfo=dt.timezone.utc)
+                with mock.patch("sys.argv", ["cd_contract.py", "validate-plan", str(path)]):
+                    self.assertEqual(contract.main(), 1)
 
 
 if __name__ == "__main__":

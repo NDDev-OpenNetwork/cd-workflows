@@ -190,8 +190,8 @@ def validate_evidence(evidence: dict[str, Any], plan: dict[str, Any], state: dic
         raise ValueError("evidence result differs from resulting deployment state")
 
 
-def transition(state: dict[str, Any], target: str, plan: dict[str, Any], at: str) -> dict[str, Any]:
-    validate_plan(plan)
+def transition(state: dict[str, Any], target: str, plan: dict[str, Any], at: str, *, now: dt.datetime | None = None) -> dict[str, Any]:
+    validate_plan(plan, now=now)
     validate_state(state, plan)
     current = state["state"]
     if target not in TRANSITIONS[current]:
@@ -227,25 +227,26 @@ def main() -> int:
     move = sub.add_parser("transition"); move.add_argument("plan"); move.add_argument("state"); move.add_argument("target"); move.add_argument("output"); move.add_argument("--at", required=True)
     args = parser.parse_args()
     try:
+        runtime_now = dt.datetime.now(dt.timezone.utc)
         if args.command == "validate-schema":
             for path in pathlib.Path("schemas/v1").glob("*.json"):
                 json.loads(path.read_text())
             return 0
         if args.command == "seal":
-            plan = load(args.input); plan["plan_digest"] = plan_digest(plan); validate_plan(plan); write(args.output, plan); return 0
+            plan = load(args.input); plan["plan_digest"] = plan_digest(plan); validate_plan(plan, now=runtime_now); write(args.output, plan); return 0
         if args.command == "validate-plan":
-            now = timestamp(args.now) if args.now else None; validate_plan(load(args.plan), now=now); return 0
+            now = timestamp(args.now) if args.now else runtime_now; validate_plan(load(args.plan), now=now); return 0
         if args.command == "validate-state":
-            plan = load(args.plan); validate_plan(plan); validate_state(load(args.state), plan); return 0
+            plan = load(args.plan); validate_plan(plan, now=runtime_now); validate_state(load(args.state), plan); return 0
         if args.command == "validate-approval":
-            plan = load(args.plan); validate_plan(plan); approval = load(args.approval); validate_approval(approval, plan)
+            plan = load(args.plan); validate_plan(plan, now=runtime_now); approval = load(args.approval); validate_approval(approval, plan)
             if args.operation and approval["operation"] != args.operation:
                 raise ValueError("approval operation differs from requested operation")
             return 0
         if args.command == "validate-evidence":
-            plan = load(args.plan); state = load(args.state); validate_plan(plan); validate_state(state, plan); validate_evidence(load(args.evidence), plan, state); return 0
+            plan = load(args.plan); state = load(args.state); validate_plan(plan, now=runtime_now); validate_state(state, plan); validate_evidence(load(args.evidence), plan, state); return 0
         if args.command == "transition":
-            plan = load(args.plan); result = transition(load(args.state), args.target, plan, args.at); write(args.output, result); return 0
+            plan = load(args.plan); result = transition(load(args.state), args.target, plan, args.at, now=runtime_now); write(args.output, result); return 0
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
         print(f"cd-contract: {error}", file=sys.stderr)
         return 1
