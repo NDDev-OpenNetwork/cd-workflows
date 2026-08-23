@@ -11,6 +11,11 @@ The initial v1 contract deliberately performs no external mutation. It seals
 and validates plans and proves state-machine behavior before mutation adapters
 are introduced.
 
+`cd-plan.yml` exposes two fixed execution surfaces: GitHub-hosted, or a generic
+out-of-band runner carrying `cd-plan-out-of-band`. Callers cannot supply runner
+labels or commands. A sealed plan artifact is transport evidence only; callers
+must persist durable evidence outside Actions retention.
+
 ## Trust boundaries
 
 - PR validation: schemas and fixtures only; no credentials or side effects.

@@ -1,0 +1,63 @@
+name: NDDev CD contract
+description: Seal, validate or transition an exact CD contract without external mutation
+
+inputs:
+  command:
+    required: true
+    description: seal, validate-plan or transition
+  plan:
+    required: true
+    description: Relative path to the plan or plan draft
+  state:
+    required: false
+    description: Relative state path for transition
+  target:
+    required: false
+    description: Closed deployment-state target for transition
+  output:
+    required: false
+    description: Relative output path for seal or transition
+  at:
+    required: false
+    description: Explicit RFC3339 transition time
+
+runs:
+  using: composite
+  steps:
+    - name: Execute typed CD contract operation
+      shell: bash
+      env:
+        COMMAND: ${{ inputs.command }}
+        PLAN: ${{ inputs.plan }}
+        STATE: ${{ inputs.state }}
+        TARGET: ${{ inputs.target }}
+        OUTPUT: ${{ inputs.output }}
+        AT: ${{ inputs.at }}
+      run: |
+        set -euo pipefail
+        valid_path() {
+          [[ "$1" =~ ^[A-Za-z0-9._/-]+$ && "$1" != /* && "$1" != *..* ]]
+        }
+        valid_path "$PLAN"
+        root="$(cd -- "${{ github.action_path }}/../../.." && pwd)"
+        case "$COMMAND" in
+          seal)
+            valid_path "$OUTPUT"
+            python3 "$root/scripts/cd_contract.py" seal "$PLAN" "$OUTPUT"
+            ;;
+          validate-plan)
+            [[ -z "$STATE$TARGET$OUTPUT$AT" ]]
+            python3 "$root/scripts/cd_contract.py" validate-plan "$PLAN"
+            ;;
+          transition)
+            valid_path "$STATE"
+            valid_path "$OUTPUT"
+            [[ "$TARGET" =~ ^(VALIDATED|PLANNED|APPROVED|APPLYING|VERIFYING|SUCCEEDED|FAILED_RETRYABLE|RESUMING|FAILED_ROLLBACK_REQUIRED|ROLLING_BACK|ROLLED_BACK|BLOCKED)$ ]]
+            [[ -n "$AT" ]]
+            python3 "$root/scripts/cd_contract.py" transition "$PLAN" "$STATE" "$TARGET" "$OUTPUT" --at "$AT"
+            ;;
+          *)
+            echo "unsupported typed CD command: $COMMAND" >&2
+            exit 2
+            ;;
+        esac
