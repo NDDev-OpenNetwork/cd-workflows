@@ -1,0 +1,42 @@
+name: cd-resume
+
+on:
+  workflow_call:
+    inputs:
+      contract_sha: {type: string, required: true}
+      deployment_id: {type: string, required: true}
+      plan_path: {type: string, required: true}
+      state_path: {type: string, required: true}
+      approval_path: {type: string, required: true}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  resume:
+    runs-on: [self-hosted, cd-apply-out-of-band]
+    environment: cd-apply
+    concurrency:
+      group: cd-apply-${{ inputs.deployment_id }}
+      cancel-in-progress: false
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with: {persist-credentials: false, path: source}
+      - name: Validate immutable inputs before contract checkout
+        env: {CONTRACT_SHA: "${{ inputs.contract_sha }}", PLAN_PATH: "${{ inputs.plan_path }}", STATE_PATH: "${{ inputs.state_path }}", APPROVAL_PATH: "${{ inputs.approval_path }}"}
+        run: |
+          [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          for value in "$PLAN_PATH" "$STATE_PATH" "$APPROVAL_PATH"; do
+            [[ "$value" =~ ^[A-Za-z0-9._/-]+$ && "$value" != /* && "$value" != *..* ]]
+          done
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with: {repository: NDDev-OpenNetwork/cd-workflows, ref: "${{ inputs.contract_sha }}", persist-credentials: false, path: _cd}
+      - name: Bind requested deployment
+        env: {DEPLOYMENT_ID: "${{ inputs.deployment_id }}", PLAN: "source/${{ inputs.plan_path }}"}
+        run: '[[ "$DEPLOYMENT_ID" =~ ^deploy_[0-9A-Z]{26}$ ]] && [[ "$(jq -er .deployment_id "$PLAN")" == "$DEPLOYMENT_ID" ]]'
+      - uses: ./_cd/.github/actions/lifecycle
+        with: {operation: resume, plan: "source/${{ inputs.plan_path }}", state: "source/${{ inputs.state_path }}", approval: "source/${{ inputs.approval_path }}", state_output: next-state.json, evidence_output: evidence.json}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with: {name: "cd-resume-${{ inputs.deployment_id }}", path: "next-state.json\nevidence.json", if-no-files-found: error, retention-days: 30}

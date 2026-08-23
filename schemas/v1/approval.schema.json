@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/NDDev-OpenNetwork/cd-workflows/schemas/v1/approval.schema.json",
+  "title": "NDDev deployment approval v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "deployment_id", "plan_digest", "operation", "approved_at", "approver", "approval_digest"],
+  "properties": {
+    "schema": {"const": "nddev-cd-approval/v1"},
+    "deployment_id": {"type": "string", "pattern": "^deploy_[0-9A-Z]{26}$"},
+    "plan_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "operation": {"enum": ["apply", "resume", "rollback"]},
+    "approved_at": {"type": "string", "format": "date-time"},
+    "approver": {"type": "string", "pattern": "^[A-Za-z0-9_.@/-]{1,128}$"},
+    "approval_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}
