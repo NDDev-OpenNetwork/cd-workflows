@@ -33,13 +33,19 @@ runs:
         TARGET: ${{ inputs.target }}
         OUTPUT: ${{ inputs.output }}
         AT: ${{ inputs.at }}
+        # Passed through the environment like every other value here.
+        # A ${{ }} expression interpolated straight into the script is the
+        # shape actions/code-injection flags, and this file already avoids
+        # it everywhere else; the runner sets this one, but the rule is
+        # about the shape, and one exception is what makes a habit unreliable.
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         set -euo pipefail
         valid_path() {
           [[ "$1" =~ ^[A-Za-z0-9._/-]+$ && "$1" != /* && "$1" != *..* ]]
         }
         valid_path "$PLAN"
-        root="$(cd -- "${{ github.action_path }}/../../.." && pwd)"
+        root="$(cd -- "$ACTION_PATH/../../.." && pwd)"
         case "$COMMAND" in
           seal)
             valid_path "$OUTPUT"
