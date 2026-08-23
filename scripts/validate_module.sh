@@ -31,6 +31,27 @@ if checks != ["test"] or ruleset.get("bypass_actors") != []:
 workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 if "runs-on: ubuntu-latest" not in workflow or "pull_request_target" in workflow or "secrets:" in workflow:
     raise SystemExit("public CI runner or trust boundary drifted")
+plan_workflow = Path(".github/workflows/cd-plan.yml").read_text(encoding="utf-8")
+for required in (
+    "runs-on: ubuntu-latest",
+    "runs-on: [self-hosted, cd-plan-out-of-band]",
+    "inputs.execution_surface == 'hosted'",
+    "inputs.execution_surface == 'out-of-band'",
+    "repository: NDDev-OpenNetwork/cd-workflows",
+    "ref: ${{ inputs.contract_sha }}",
+    "retention-days: 30",
+):
+    if required not in plan_workflow:
+        raise SystemExit(f"cd-plan workflow lacks {required!r}")
+for forbidden in ("pull_request_target", "secrets:", "runs-on: ${{", "shell_command", "runner_label"):
+    if forbidden in plan_workflow:
+        raise SystemExit(f"cd-plan workflow exposes forbidden surface {forbidden!r}")
+action = Path(".github/actions/contract/action.yml").read_text(encoding="utf-8")
+for command in ("seal)", "validate-plan)", "transition)"):
+    if command not in action:
+        raise SystemExit(f"contract action lacks closed command {command!r}")
+if "eval " in action or "bash -c" in action:
+    raise SystemExit("contract action permits free-form command execution")
 PY
 
 python3 - <<'PY'

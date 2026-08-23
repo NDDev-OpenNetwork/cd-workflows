@@ -1,0 +1,109 @@
+name: cd-plan
+
+on:
+  workflow_call:
+    inputs:
+      contract_sha:
+        description: Exact cd-workflows commit containing this contract.
+        type: string
+        required: true
+      plan_draft_path:
+        description: Relative caller-repository path to the reviewed plan draft.
+        type: string
+        required: true
+      execution_surface:
+        description: hosted or out-of-band.
+        type: string
+        required: true
+    outputs:
+      plan_digest:
+        description: Digest of the sealed immutable plan.
+        value: ${{ jobs.hosted.outputs.plan_digest || jobs.out-of-band.outputs.plan_digest }}
+
+permissions:
+  contents: read
+
+jobs:
+  hosted:
+    if: ${{ inputs.execution_surface == 'hosted' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      plan_digest: ${{ steps.digest.outputs.value }}
+    steps:
+      - name: Validate immutable inputs
+        env:
+          CONTRACT_SHA: ${{ inputs.contract_sha }}
+          PLAN_PATH: ${{ inputs.plan_draft_path }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PLAN_PATH" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_PATH" != /* && "$PLAN_PATH" != *..* ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          persist-credentials: false
+          path: source
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: NDDev-OpenNetwork/cd-workflows
+          ref: ${{ inputs.contract_sha }}
+          persist-credentials: false
+          path: _cd
+      - name: Seal immutable plan
+        uses: ./_cd/.github/actions/contract
+        with:
+          command: seal
+          plan: source/${{ inputs.plan_draft_path }}
+          output: sealed-plan.json
+      - id: digest
+        name: Export plan digest
+        run: echo "value=$(jq -er .plan_digest sealed-plan.json)" >> "$GITHUB_OUTPUT"
+      - name: Transport sealed plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cd-plan-${{ github.run_id }}
+          path: sealed-plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+  out-of-band:
+    if: ${{ inputs.execution_surface == 'out-of-band' }}
+    runs-on: [self-hosted, cd-plan-out-of-band]
+    timeout-minutes: 5
+    outputs:
+      plan_digest: ${{ steps.digest.outputs.value }}
+    steps:
+      - name: Validate immutable inputs
+        env:
+          CONTRACT_SHA: ${{ inputs.contract_sha }}
+          PLAN_PATH: ${{ inputs.plan_draft_path }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PLAN_PATH" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_PATH" != /* && "$PLAN_PATH" != *..* ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          persist-credentials: false
+          path: source
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
+        with:
+          repository: NDDev-OpenNetwork/cd-workflows
+          ref: ${{ inputs.contract_sha }}
+          persist-credentials: false
+          path: _cd
+      - name: Seal immutable plan
+        uses: ./_cd/.github/actions/contract
+        with:
+          command: seal
+          plan: source/${{ inputs.plan_draft_path }}
+          output: sealed-plan.json
+      - id: digest
+        name: Export plan digest
+        run: echo "value=$(jq -er .plan_digest sealed-plan.json)" >> "$GITHUB_OUTPUT"
+      - name: Transport sealed plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cd-plan-${{ github.run_id }}
+          path: sealed-plan.json
+          if-no-files-found: error
+          retention-days: 30
