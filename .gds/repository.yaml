@@ -1,0 +1,65 @@
+schema_version: 1
+
+repository:
+  id: "repo_01M0Q1Y0YVCJNH27FMQ49MH5AW"
+  display_name: "cd-workflows"
+  roles: ["project", "module"]
+  lifecycle: "active"
+
+provider:
+  type: "github"
+  installation: "installation:github-opennetwork"
+  repository_id: 1343629973
+  owner: "NDDev-OpenNetwork"
+  name: "cd-workflows"
+
+classification:
+  portfolios: ["portfolio:opennetwork-projects"]
+  visibility_contract: "public"
+  data_classification: "public"
+
+product:
+  purpose: "Generic immutable plan, approval, apply, verify, evidence, resume and rollback contracts."
+  capabilities:
+    - "Content-addressed deployment plans"
+    - "Validated deployment state transitions"
+    - "Typed mutation adapters with explicit trust boundaries"
+  entrypoints:
+    - change: "Public CD contracts"
+      path: "schemas"
+    - change: "Reusable delivery workflows"
+      path: ".github/workflows"
+    - change: "Contract implementation and tests"
+      path: "scripts"
+
+policy:
+  profiles: ["repository-default", "public-module"]
+  rollout_ring: "standard"
+
+git:
+  default_branch: "main"
+  integration: "pull-request"
+  branch_model: "task-branches"
+  handoff_pr: "preferred"
+  cleanup: "merged-only"
+
+verification:
+  commands:
+    test: ["scripts/validate_module.sh"]
+  required: ["test"]
+  required_contexts: ["test"]
+
+agent:
+  context_profile: "project-default"
+  generated_agents: false
+  serena: {enabled: false, provenance_required: false}
+
+module:
+  contract: "public"
+  consumption: ["git-submodule"]
+  compatibility: "commit-contract"
+  pin_policy: "default-branch-commit"
+  publication: {registry: "none", github_release: "required"}
+
+release:
+  mode: "bundle"
