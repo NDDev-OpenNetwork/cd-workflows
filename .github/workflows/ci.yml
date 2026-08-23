@@ -22,7 +22,5 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.0.0
         with:
           persist-credentials: false
-      - name: Validate schemas
-        run: python3 scripts/cd_contract.py validate-schema
-      - name: Test contracts
-        run: python3 -m unittest discover -s tests -v
+      - name: Validate public module
+        run: scripts/validate_module.sh
