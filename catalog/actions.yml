@@ -21,5 +21,11 @@ actions:
     sha: "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     version: "v7.0.1"
   - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/public-codeql.yml
-    sha: "b50364e2a415267688c1d845cea6866cdb5e53d6"
-    version: "0.1.4"
+    sha: "1eaaa687f32f81c33ac99be3db0b76d0204420b8"
+    version: "0.1.8"
+  - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-promotion-gate.yml
+    sha: "1eaaa687f32f81c33ac99be3db0b76d0204420b8"
+    version: "0.1.8"
+  - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-supply-chain.yml
+    sha: "1eaaa687f32f81c33ac99be3db0b76d0204420b8"
+    version: "0.1.8"

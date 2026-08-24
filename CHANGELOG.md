@@ -5,6 +5,8 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-25
+
 ### Fixed
 
 - `cd-apply` now proves a caller-supplied contract commit is an ancestor of
