@@ -6,7 +6,7 @@ cd "${repo_root}"
 
 python3 scripts/cd_contract.py validate-schema
 python3 -m unittest discover -s tests -v
-python3 -m py_compile scripts/cd_contract.py tests/test_cd_contract.py
+python3 -m py_compile scripts/cd_contract.py tests/test_cd_contract.py tests/test_contract_sha_provenance.py
 
 python3 - <<'PY'
 import json
@@ -70,6 +70,21 @@ for name in ("apply", "verify", "resume", "rollback", "evidence"):
         for required in ("runs-on: [self-hosted, cd-apply-out-of-band]", "environment: cd-apply", "cancel-in-progress: false", "id-token: write"):
             if required not in content:
                 raise SystemExit(f"cd-{name} workflow lacks {required!r}")
+    if name == "apply":
+        for required in (
+            "authorize-contract:",
+            "runs-on: ubuntu-latest",
+            "permissions: {}",
+            "fetch-depth: 0",
+            'git -C authority fetch --no-tags --depth=1 origin "$CONTRACT_SHA"',
+            'git -C authority merge-base --is-ancestor "$CONTRACT_SHA" refs/remotes/origin/main',
+            "needs: authorize-contract",
+            '[[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]',
+        ):
+            if required not in content:
+                raise SystemExit(f"cd-apply workflow lacks provenance control {required!r}")
+        if content.index("authorize-contract:") > content.index("  apply:"):
+            raise SystemExit("cd-apply privileged job appears before contract authorization")
     if name == "verify" and "runs-on: [self-hosted, cd-verify-out-of-band]" not in content:
         raise SystemExit("cd-verify workflow is not independent of the managed fleet")
 

@@ -24,6 +24,10 @@ non-cancelling per-deployment serialization. `cd-verify.yml` uses the separate
 `cd-verify-out-of-band` surface. Every adapter result must validate as an exact
 plan-bound state transition and content-addressed evidence record before the
 workflow can succeed. `cd-evidence.yml` provides a hosted, read-only verifier.
+Before `cd-apply` can reach its privileged runner, a GitHub-hosted gate fetches
+the requested contract commit as data and proves it is reachable from the
+module's reviewed `main`; an unmerged or fork-only SHA fails before OIDC or
+self-hosted capacity is granted.
 
 ## Trust boundaries
 
