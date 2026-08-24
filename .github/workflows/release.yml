@@ -1,0 +1,70 @@
+name: release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact release identity
+        id: version
+        run: |
+          set -euo pipefail
+          version="$GITHUB_REF_NAME"
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [ "$(cat VERSION)" = "$version" ]
+          grep -Fxq "## [$version] - 2026-08-25" CHANGELOG.md
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          printf 'version=%s\n' "$version" >>"$GITHUB_OUTPUT"
+
+  promotion:
+    needs: resolve
+    permissions:
+      actions: read # verify exact public workflow evidence
+      contents: read # read the signed annotated tag
+    uses: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-promotion-gate.yml@1eaaa687f32f81c33ac99be3db0b76d0204420b8 # 0.1.8
+    with:
+      version: ${{ needs.resolve.outputs.version }}
+      runner: ubuntu-latest
+
+  authorize:
+    needs: [resolve, promotion]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release
+    permissions: {}
+    steps:
+      - run: echo 'protected release authority granted'
+
+  publish:
+    needs: [resolve, promotion, authorize]
+    permissions:
+      contents: write # create the immutable release
+      id-token: write # mint Sigstore identity
+      attestations: write # persist provenance and SBOM attestations
+      artifact-metadata: write # persist attested artifact metadata
+    uses: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-supply-chain.yml@1eaaa687f32f81c33ac99be3db0b76d0204420b8 # 0.1.8
+    with:
+      version: ${{ needs.resolve.outputs.version }}
+      package_name: cd-workflows
+      archive_paths: 'README.md LICENSE SECURITY.md CONTRIBUTING.md VERSION CHANGELOG.md .github schemas scripts tests'
+      runner: ubuntu-latest

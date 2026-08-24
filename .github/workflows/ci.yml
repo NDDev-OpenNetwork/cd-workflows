@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    name: test
+  validate:
+    name: static validators
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -24,3 +24,15 @@ jobs:
           persist-credentials: false
       - name: Validate public module
         run: scripts/validate_module.sh
+
+  test:
+    name: test
+    needs: validate
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preserve required check identity
+        env:
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+        run: test "$VALIDATE_RESULT" = success
