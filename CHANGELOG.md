@@ -7,6 +7,10 @@ Versioning.
 
 ### Fixed
 
+- `cd-apply` now proves a caller-supplied contract commit is an ancestor of
+  reviewed `main` in a GitHub-hosted authorization job before the privileged
+  self-hosted/OIDC job can be scheduled.
+
 - Every `actions/checkout` pin carried the comment `# v5.0.0` while its SHA was
   `v7.0.1` — two majors apart, in the module that deploys the fleet. Fifteen
   lines, wrong from the day they were written, because nothing compared the
