@@ -41,7 +41,7 @@ jobs:
     permissions:
       actions: read # verify exact public workflow evidence
       contents: read # read the signed annotated tag
-    uses: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-promotion-gate.yml@1eaaa687f32f81c33ac99be3db0b76d0204420b8 # 0.1.8
+    uses: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-promotion-gate.yml@409817cf743e76383c84e30c72edf781d73b71a1 # 0.1.11
     with:
       version: ${{ needs.resolve.outputs.version }}
       runner: ubuntu-latest
@@ -62,7 +62,7 @@ jobs:
       id-token: write # mint Sigstore identity
       attestations: write # persist provenance and SBOM attestations
       artifact-metadata: write # persist attested artifact metadata
-    uses: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-supply-chain.yml@1eaaa687f32f81c33ac99be3db0b76d0204420b8 # 0.1.8
+    uses: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-supply-chain.yml@409817cf743e76383c84e30c72edf781d73b71a1 # 0.1.11
     with:
       version: ${{ needs.resolve.outputs.version }}
       package_name: cd-workflows
