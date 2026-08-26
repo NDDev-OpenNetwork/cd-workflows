@@ -5,6 +5,14 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-26
+
+### Changed
+
+- Hosted reusable release, CodeQL and supply-chain callers now pin signed
+  immutable `ci-workflows 0.1.11`; the canonical action catalog carries the
+  same exact commit and version.
+
 ## [0.1.1] - 2026-08-25
 
 ### Fixed
