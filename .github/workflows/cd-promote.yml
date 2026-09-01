@@ -1,0 +1,77 @@
+name: cd-promote
+
+# Promote an already-built artifact by digest: point an environment tag at an
+# image the registry already holds, and prove the tag resolves to exactly that
+# digest afterwards. No checkout of deployed source, no build context, no way
+# to introduce new bytes -- see docs/artifact-contract.md. The caller grants
+# packages: write, which is the entire privilege surface.
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: 'Image repository without a tag, e.g. ghcr.io/nddev-opennetwork/example-service.'
+        type: string
+        required: true
+      digest:
+        description: 'Content digest of the artifact to promote, sha256:<64 hex>.'
+        type: string
+        required: true
+      to_tag:
+        description: 'Environment tag to point at the digest, e.g. staging or production.'
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - name: Validate immutable inputs
+        env:
+          IMAGE: ${{ inputs.image }}
+          DIGEST: ${{ inputs.digest }}
+          TO_TAG: ${{ inputs.to_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE" =~ ^ghcr\.io/[a-z0-9][a-z0-9._/-]*$ ]]
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$TO_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
+
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_ACTOR" --password-stdin
+
+      - name: Point the tag at the digest
+        env:
+          IMAGE: ${{ inputs.image }}
+          DIGEST: ${{ inputs.digest }}
+          TO_TAG: ${{ inputs.to_tag }}
+        run: |
+          set -euo pipefail
+          # inspect first: promoting a digest the registry does not hold must
+          # fail here, as a missing artifact, not inside the tag write.
+          docker buildx imagetools inspect "${IMAGE}@${DIGEST}" >/dev/null
+          docker buildx imagetools create --tag "${IMAGE}:${TO_TAG}" "${IMAGE}@${DIGEST}"
+
+      - name: Read the tag back
+        env:
+          IMAGE: ${{ inputs.image }}
+          DIGEST: ${{ inputs.digest }}
+          TO_TAG: ${{ inputs.to_tag }}
+        run: |
+          set -euo pipefail
+          resolved="$(docker buildx imagetools inspect "${IMAGE}:${TO_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          if [ "$resolved" != "$DIGEST" ]; then
+            echo "tag ${TO_TAG} resolves to ${resolved}, expected ${DIGEST}" >&2
+            exit 1
+          fi
+          echo "promoted: ${IMAGE}:${TO_TAG} -> ${DIGEST}"

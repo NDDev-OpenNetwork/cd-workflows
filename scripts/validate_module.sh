@@ -98,6 +98,36 @@ for name in ("apply", "verify", "resume", "rollback", "evidence", "plan"):
     if name == "verify" and "runs-on: [self-hosted, cd-verify-out-of-band]" not in content:
         raise SystemExit("cd-verify workflow is not independent of the managed fleet")
 
+# cd-promote moves an environment tag onto an already-pushed digest and
+# nothing else. It must never gain a build surface: no checkout (promotion
+# needs no source), no build-push, no free-form runner. The read-back is the
+# contract -- a promote that cannot prove the tag resolves to the digest it
+# was given is a tag write, not a promotion.
+promote = Path(".github/workflows/cd-promote.yml").read_text(encoding="utf-8")
+for required in (
+    "permissions: {}",
+    "runs-on: ubuntu-latest",
+    "packages: write",
+    'sha256:[0-9a-f]{64}',
+    "imagetools inspect",
+    "imagetools create",
+    "Read the tag back",
+):
+    if required not in promote:
+        raise SystemExit(f"cd-promote workflow lacks {required!r}")
+for forbidden in (
+    "pull_request_target",
+    "secrets:",
+    "runs-on: ${{",
+    "actions/checkout",
+    "build-push-action",
+    "context:",
+):
+    if forbidden in promote:
+        raise SystemExit(f"cd-promote workflow exposes forbidden surface {forbidden!r}")
+if promote.index("imagetools inspect") > promote.index("imagetools create"):
+    raise SystemExit("cd-promote must prove the digest exists before writing the tag")
+
 declared_labels = {
     line.removeprefix("    - ").strip()
     for line in Path(".github/actionlint.yaml").read_text(encoding="utf-8").splitlines()
