@@ -20,12 +20,41 @@ on:
         description: Digest of the sealed immutable plan.
         value: ${{ jobs.hosted.outputs.plan_digest || jobs.out-of-band.outputs.plan_digest }}
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
+  authorize-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      contract_sha: ${{ steps.authorize.outputs.contract_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NDDev-OpenNetwork/cd-workflows
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+          path: authority
+      - name: Authorize reviewed contract ancestry
+        id: authorize
+        env:
+          CONTRACT_SHA: ${{ inputs.contract_sha }}
+        run: |
+          [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]
+          git -C authority fetch --no-tags --depth=1 origin "$CONTRACT_SHA"
+          git -C authority cat-file -e "$CONTRACT_SHA^{commit}"
+          git -C authority merge-base --is-ancestor "$CONTRACT_SHA" refs/remotes/origin/main
+          printf 'contract_sha=%s\n' "$CONTRACT_SHA" >> "$GITHUB_OUTPUT"
+
   hosted:
     if: ${{ inputs.execution_surface == 'hosted' }}
+    needs: authorize-contract
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -34,10 +63,12 @@ jobs:
       - name: Validate immutable inputs
         env:
           CONTRACT_SHA: ${{ inputs.contract_sha }}
+          AUTHORIZED_CONTRACT_SHA: ${{ needs.authorize-contract.outputs.contract_sha }}
           PLAN_PATH: ${{ inputs.plan_draft_path }}
         run: |
           set -euo pipefail
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]
           [[ "$PLAN_PATH" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_PATH" != /* && "$PLAN_PATH" != *..* ]]
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,6 +99,9 @@ jobs:
 
   out-of-band:
     if: ${{ inputs.execution_surface == 'out-of-band' }}
+    needs: authorize-contract
+    permissions:
+      contents: read
     runs-on: [self-hosted, cd-plan-out-of-band]
     timeout-minutes: 5
     outputs:
@@ -76,10 +110,12 @@ jobs:
       - name: Validate immutable inputs
         env:
           CONTRACT_SHA: ${{ inputs.contract_sha }}
+          AUTHORIZED_CONTRACT_SHA: ${{ needs.authorize-contract.outputs.contract_sha }}
           PLAN_PATH: ${{ inputs.plan_draft_path }}
         run: |
           set -euo pipefail
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]
           [[ "$PLAN_PATH" =~ ^[A-Za-z0-9._/-]+$ && "$PLAN_PATH" != /* && "$PLAN_PATH" != *..* ]]
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

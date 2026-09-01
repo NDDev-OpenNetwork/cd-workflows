@@ -62,7 +62,11 @@ for forbidden in ("eval ", "bash -c", "ssh ", "sudo ", "curl "):
     if forbidden in lifecycle_action:
         raise SystemExit(f"lifecycle action exposes forbidden execution surface {forbidden!r}")
 
-for name in ("apply", "verify", "resume", "rollback", "evidence"):
+first_job = {
+    "apply": "  apply:", "verify": "  verify:", "resume": "  resume:",
+    "rollback": "  rollback:", "evidence": "  validate:", "plan": "  hosted:",
+}
+for name in ("apply", "verify", "resume", "rollback", "evidence", "plan"):
     content = Path(f".github/workflows/cd-{name}.yml").read_text(encoding="utf-8")
     if "pull_request_target" in content or "secrets:" in content or "runs-on: ${{" in content:
         raise SystemExit(f"cd-{name} workflow violates the fixed trust boundary")
@@ -70,21 +74,27 @@ for name in ("apply", "verify", "resume", "rollback", "evidence"):
         for required in ("runs-on: [self-hosted, cd-apply-out-of-band]", "environment: cd-apply", "cancel-in-progress: false", "id-token: write"):
             if required not in content:
                 raise SystemExit(f"cd-{name} workflow lacks {required!r}")
-    if name == "apply":
-        for required in (
-            "authorize-contract:",
-            "runs-on: ubuntu-latest",
-            "permissions: {}",
-            "fetch-depth: 0",
-            'git -C authority fetch --no-tags --depth=1 origin "$CONTRACT_SHA"',
-            'git -C authority merge-base --is-ancestor "$CONTRACT_SHA" refs/remotes/origin/main',
-            "needs: authorize-contract",
-            '[[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]',
-        ):
-            if required not in content:
-                raise SystemExit(f"cd-apply workflow lacks provenance control {required!r}")
-        if content.index("authorize-contract:") > content.index("  apply:"):
-            raise SystemExit("cd-apply privileged job appears before contract authorization")
+    # Every entrypoint that accepts a contract_sha proves reviewed ancestry on
+    # a hosted job before anything checks that commit out, and the consuming
+    # job re-compares the authorized value. Only cd-apply carried this once;
+    # resume, rollback, verify, evidence and the out-of-band plan branch
+    # executed a caller-supplied commit on their runners without it.
+    for required in (
+        "authorize-contract:",
+        "runs-on: ubuntu-latest",
+        "permissions: {}",
+        "fetch-depth: 0",
+        'git -C authority fetch --no-tags --depth=1 origin "$CONTRACT_SHA"',
+        'git -C authority merge-base --is-ancestor "$CONTRACT_SHA" refs/remotes/origin/main',
+        "needs: authorize-contract",
+        '[[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]',
+    ):
+        if required not in content:
+            raise SystemExit(f"cd-{name} workflow lacks provenance control {required!r}")
+    if content.index("authorize-contract:") > content.index(first_job[name]):
+        raise SystemExit(f"cd-{name} privileged job appears before contract authorization")
+    if content.count("needs: authorize-contract") < content.count("ref: ${{ inputs.contract_sha }}"):
+        raise SystemExit(f"cd-{name} checks out the contract in a job that skipped authorization")
     if name == "verify" and "runs-on: [self-hosted, cd-verify-out-of-band]" not in content:
         raise SystemExit("cd-verify workflow is not independent of the managed fleet")
 
