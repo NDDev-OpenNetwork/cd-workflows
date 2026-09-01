@@ -9,12 +9,41 @@ on:
       state_path: {type: string, required: true}
       approval_path: {type: string, required: true}
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
+  authorize-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      contract_sha: ${{ steps.authorize.outputs.contract_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NDDev-OpenNetwork/cd-workflows
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+          path: authority
+      - name: Authorize reviewed contract ancestry
+        id: authorize
+        env:
+          CONTRACT_SHA: ${{ inputs.contract_sha }}
+        run: |
+          [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]
+          git -C authority fetch --no-tags --depth=1 origin "$CONTRACT_SHA"
+          git -C authority cat-file -e "$CONTRACT_SHA^{commit}"
+          git -C authority merge-base --is-ancestor "$CONTRACT_SHA" refs/remotes/origin/main
+          printf 'contract_sha=%s\n' "$CONTRACT_SHA" >> "$GITHUB_OUTPUT"
+
   resume:
+    needs: authorize-contract
+    permissions:
+      contents: read
+      id-token: write
     runs-on: [self-hosted, cd-apply-out-of-band]
     environment: cd-apply
     concurrency:
@@ -25,7 +54,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false, path: source}
       - name: Validate immutable inputs before contract checkout
-        env: {CONTRACT_SHA: "${{ inputs.contract_sha }}", PLAN_PATH: "${{ inputs.plan_path }}", STATE_PATH: "${{ inputs.state_path }}", APPROVAL_PATH: "${{ inputs.approval_path }}"}
+        env: {CONTRACT_SHA: "${{ inputs.contract_sha }}", AUTHORIZED_CONTRACT_SHA: "${{ needs.authorize-contract.outputs.contract_sha }}", PLAN_PATH: "${{ inputs.plan_path }}", STATE_PATH: "${{ inputs.state_path }}", APPROVAL_PATH: "${{ inputs.approval_path }}"}
         run: |
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
           for value in "$PLAN_PATH" "$STATE_PATH" "$APPROVAL_PATH"; do
