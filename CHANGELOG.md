@@ -5,6 +5,9 @@ Versioning.
 
 ## [Unreleased]
 
+- Publish unsuccessful completed self-workflow attempts as unassigned,
+  repository-local CI evidence; preserve actual conclusions and exact attempts.
+
 ## [0.1.2] - 2026-08-26
 
 ### Changed

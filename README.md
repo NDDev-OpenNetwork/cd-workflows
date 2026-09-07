@@ -46,3 +46,11 @@ python3 scripts/cd_contract.py seal examples/plan.draft.json /tmp/plan.json
 python3 scripts/cd_contract.py validate-plan /tmp/plan.json
 python3 -m unittest discover -s tests -v
 ```
+
+
+## CI feedback
+
+The CI feedback workflow reports unsuccessful completed self-workflow attempts
+as unassigned issues in this repository. It uses a pinned publisher and records
+actual job conclusions and attempt identity without executing source-run code.
+Issue publication does not launch a repair agent or authorize deployment.
