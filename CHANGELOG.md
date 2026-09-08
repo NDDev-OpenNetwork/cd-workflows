@@ -5,6 +5,9 @@ Versioning.
 
 ## [Unreleased]
 
+- Select continuous-development so ordinary merge does not wait on the
+  `test` GitHub required check; local `verification.required` stays.
+
 - Publish unsuccessful completed self-workflow attempts as unassigned,
   repository-local CI evidence; preserve actual conclusions and exact attempts.
 
