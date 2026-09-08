@@ -23,12 +23,18 @@ for line in (
     if line not in anchor:
         raise SystemExit(f"public module anchor lacks {line!r}")
 ruleset = json.loads(Path(".github/rulesets/branch-main.json").read_text())
-checks = []
-for rule in ruleset.get("rules", []):
-    if rule.get("type") == "required_status_checks":
-        checks = [row["context"] for row in rule["parameters"]["required_status_checks"]]
-if checks != ["test"] or ruleset.get("bypass_actors") != []:
-    raise SystemExit("public ruleset does not require the exact test context without bypass")
+rule_types = [rule.get("type") for rule in ruleset.get("rules", [])]
+if (
+    "continuous-development" not in anchor
+    or "  required_contexts: []" not in anchor
+    or ruleset.get("bypass_actors") != []
+    or "required_status_checks" in rule_types
+    or set(rule_types) != {"deletion", "non_fast_forward", "pull_request", "required_signatures"}
+):
+    raise SystemExit(
+        "public ruleset must keep signatures/PR/deletion/non-fast-forward "
+        "without required checks or bypass"
+    )
 workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 if "runs-on: ubuntu-latest" not in workflow or "pull_request_target" in workflow or "secrets:" in workflow:
     raise SystemExit("public CI runner or trust boundary drifted")

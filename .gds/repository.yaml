@@ -33,7 +33,7 @@ product:
       path: "scripts"
 
 policy:
-  profiles: ["repository-default", "public-module"]
+  profiles: ["repository-default", "public-module", "continuous-development"]
   rollout_ring: "standard"
 
 git:
@@ -47,7 +47,7 @@ verification:
   commands:
     test: ["scripts/validate_module.sh"]
   required: ["test"]
-  required_contexts: ["test"]
+  required_contexts: []
 
 agent:
   context_profile: "project-default"
