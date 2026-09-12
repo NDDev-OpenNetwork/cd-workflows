@@ -45,7 +45,7 @@ for required in (
     "inputs.execution_surface == 'hosted'",
     "inputs.execution_surface == 'out-of-band'",
     "repository: NDDev-OpenNetwork/cd-workflows",
-    "ref: ${{ inputs.contract_sha }}",
+    "ref: ${{ needs.authorize-contract.outputs.contract_sha }}",
     "retention-days: 30",
 ):
     if required not in plan_workflow:
@@ -99,7 +99,7 @@ for name in ("apply", "verify", "resume", "rollback", "evidence", "plan"):
             raise SystemExit(f"cd-{name} workflow lacks provenance control {required!r}")
     if content.index("authorize-contract:") > content.index(first_job[name]):
         raise SystemExit(f"cd-{name} privileged job appears before contract authorization")
-    if content.count("needs: authorize-contract") < content.count("ref: ${{ inputs.contract_sha }}"):
+    if content.count("needs: authorize-contract") < content.count("ref: ${{ needs.authorize-contract.outputs.contract_sha }}"):
         raise SystemExit(f"cd-{name} checks out the contract in a job that skipped authorization")
     if name == "verify" and "runs-on: [self-hosted, cd-verify-out-of-band]" not in content:
         raise SystemExit("cd-verify workflow is not independent of the managed fleet")

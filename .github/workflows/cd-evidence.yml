@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       contract_sha: ${{ steps.authorize.outputs.contract_sha }}
+      private_runner_allowed: ${{ steps.authorize.outputs.private_runner_allowed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,13 +31,28 @@ jobs:
         id: authorize
         env:
           CONTRACT_SHA: ${{ inputs.contract_sha }}
+          CALLER_PRIVATE: ${{ github.event.repository.private }}
+          CALLER_EVENT: ${{ github.event_name }}
+          CALLER_REF: ${{ github.ref }}
+          CALLER_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REQUIRES_PRIVATE_RUNNER: "false"
         run: |
+          set -euo pipefail
+          private_runner_allowed=false
+          if [[ "$CALLER_PRIVATE" == true && -n "$CALLER_DEFAULT_BRANCH" &&
+                "$CALLER_REF" == "refs/heads/$CALLER_DEFAULT_BRANCH" &&
+                "$CALLER_EVENT" =~ ^(push|workflow_dispatch|schedule)$ ]]; then
+            private_runner_allowed=true
+          fi
+          if [[ "$REQUIRES_PRIVATE_RUNNER" == true && "$private_runner_allowed" != true ]]; then
+            echo 'Private CD runners require a trusted default-branch push, manual or scheduled caller.' >&2
+            exit 1
+          fi
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]
           git -C authority fetch --no-tags --depth=1 origin "$CONTRACT_SHA"
           git -C authority cat-file -e "$CONTRACT_SHA^{commit}"
           git -C authority merge-base --is-ancestor "$CONTRACT_SHA" refs/remotes/origin/main
-          printf 'contract_sha=%s\n' "$CONTRACT_SHA" >> "$GITHUB_OUTPUT"
+          printf 'contract_sha=%s\nprivate_runner_allowed=%s\n' "$CONTRACT_SHA" "$private_runner_allowed" >> "$GITHUB_OUTPUT"
 
   validate:
     needs: authorize-contract
@@ -50,12 +66,14 @@ jobs:
       - name: Validate immutable inputs before contract checkout
         env: {CONTRACT_SHA: "${{ inputs.contract_sha }}", AUTHORIZED_CONTRACT_SHA: "${{ needs.authorize-contract.outputs.contract_sha }}", PLAN_PATH: "${{ inputs.plan_path }}", STATE_PATH: "${{ inputs.state_path }}", EVIDENCE_PATH: "${{ inputs.evidence_path }}"}
         run: |
+          set -euo pipefail
           [[ "$CONTRACT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTRACT_SHA" == "$AUTHORIZED_CONTRACT_SHA" ]]
           for value in "$PLAN_PATH" "$STATE_PATH" "$EVIDENCE_PATH"; do
             [[ "$value" =~ ^[A-Za-z0-9._/-]+$ && "$value" != /* && "$value" != *..* ]]
           done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {repository: NDDev-OpenNetwork/cd-workflows, ref: "${{ inputs.contract_sha }}", persist-credentials: false, path: _cd}
+        with: {repository: NDDev-OpenNetwork/cd-workflows, ref: "${{ needs.authorize-contract.outputs.contract_sha }}", persist-credentials: false, path: _cd}
       - uses: ./_cd/.github/actions/contract
         with:
           command: validate-evidence
