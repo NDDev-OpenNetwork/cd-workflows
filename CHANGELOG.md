@@ -5,6 +5,11 @@ Versioning.
 
 ## [Unreleased]
 
+- Repair five contract-authorization workflows that compared an input with an
+  unset authorization output before producing it. Execute regression tests
+  against the actual shell blocks and use the verified output for every contract
+  checkout. Restrict private CD runners to trusted default-branch callers.
+
 - Select continuous-development so ordinary merge does not wait on the
   `test` GitHub required check; local `verification.required` stays.
 
