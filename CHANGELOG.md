@@ -5,6 +5,8 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-15
+
 - Repair five contract-authorization workflows that compared an input with an
   unset authorization output before producing it. Execute regression tests
   against the actual shell blocks and use the verified output for every contract
@@ -15,6 +17,8 @@ Versioning.
 
 - Publish unsuccessful completed self-workflow attempts as unassigned,
   repository-local CI evidence; preserve actual conclusions and exact attempts.
+
+- Match the release changelog heading on version only, not a frozen 0.1.2 date.
 
 ## [0.1.2] - 2026-08-26
 
