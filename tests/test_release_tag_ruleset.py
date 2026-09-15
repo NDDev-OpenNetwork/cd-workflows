@@ -29,3 +29,11 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         for ref in ("refs/heads/0.1.2", "refs/tags/main", "refs/tags/preview/0.1.2", "refs/tags/v1"):
             with self.subTest(ref=ref):
                 self.assertFalse(any(matches(pattern, ref) for pattern in patterns))
+
+class ReleaseChangelogMatchTests(unittest.TestCase):
+    def test_resolve_matches_any_dated_heading_for_the_tag_version(self):
+        """A frozen 0.1.2 date in the grep made every later tag fail resolve."""
+        source = (ROOT / ".github/workflows/release.yml").read_text()
+        self.assertIn(r'grep -q "^## \[$version\]" CHANGELOG.md', source)
+        self.assertNotIn("2026-08-26", source.split("Validate exact release identity", 1)[1].split("git fetch", 1)[0])
+
