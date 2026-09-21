@@ -5,6 +5,11 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-21
+
+- Converge the four ci-workflows callers and `catalog/actions.yml` on the
+  signed 0.1.26 tag.
+
 ## [0.1.4] - 2026-09-21
 
 - Repoint ci-feedback publishing to the ci-workflows module home and converge
