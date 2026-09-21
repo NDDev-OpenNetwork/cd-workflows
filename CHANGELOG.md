@@ -5,6 +5,13 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-21
+
+- Repoint ci-feedback publishing to the ci-workflows module home and converge
+  the four ci-workflows callers on the signed 0.1.25 tag; `catalog/actions.yml`
+  moves with every bump so the registry matches the tree.
+
+
 ## [0.1.3] - 2026-09-15
 
 - Repair five contract-authorization workflows that compared an input with an
