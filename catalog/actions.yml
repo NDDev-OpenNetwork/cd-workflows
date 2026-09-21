@@ -21,14 +21,14 @@ actions:
     sha: "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     version: "v7.0.1"
   - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/ci-feedback.yml
-    sha: "17a7c6e5c4aeac291e8e9e5456937d8ee1d74a1b"
-    version: "0.1.25"
+    sha: "a7b90bdf1ac12465cbd07072e3360442cfc8eec6"
+    version: "0.1.26"
   - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/public-codeql.yml
-    sha: "17a7c6e5c4aeac291e8e9e5456937d8ee1d74a1b"
-    version: "0.1.25"
+    sha: "a7b90bdf1ac12465cbd07072e3360442cfc8eec6"
+    version: "0.1.26"
   - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-promotion-gate.yml
-    sha: "17a7c6e5c4aeac291e8e9e5456937d8ee1d74a1b"
-    version: "0.1.25"
+    sha: "a7b90bdf1ac12465cbd07072e3360442cfc8eec6"
+    version: "0.1.26"
   - name: NDDev-OpenNetwork/ci-workflows/.github/workflows/release-supply-chain.yml
-    sha: "17a7c6e5c4aeac291e8e9e5456937d8ee1d74a1b"
-    version: "0.1.25"
+    sha: "a7b90bdf1ac12465cbd07072e3360442cfc8eec6"
+    version: "0.1.26"
