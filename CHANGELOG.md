@@ -5,10 +5,12 @@ Versioning.
 
 ## [Unreleased]
 
-## [0.1.5] - 2026-09-21
+## [0.1.6] - 2026-09-21
 
 - Converge the four ci-workflows callers and `catalog/actions.yml` on the
-  signed 0.1.26 tag.
+  signed 0.1.26 tag. Supersedes tag `0.1.5`, which was cut before `VERSION`
+  moved, failed the release identity check, and is retained as an immutable
+  orphan — it publishes nothing.
 
 ## [0.1.4] - 2026-09-21
 
